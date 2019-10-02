@@ -1,11 +1,15 @@
 import logging
 import sys
+import os
 
 from influxspeedtest.common.logfilters import SingleLevelFilter
-from influxspeedtest.config import config
+
+# Logging
+config_logging_level = os.getenv("LOG_LEVEL", "debug")
+config_logging_level = config_logging_level.upper()
 
 log = logging.getLogger(__name__)
-log.setLevel(config.logging_level)
+log.setLevel(config_logging_level)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s: %(message)s')
 
 general_handler = logging.StreamHandler(sys.stdout)

@@ -1,8 +1,6 @@
 version: '2'
 services:
   speedtest:
-    image: barrycarey/speedtest-for-influxdb-and-grafana
-    container_name: speedtest
-    volumes:
-      - ./config.ini:/src/config.ini
-    restart: always
+    image: seriusrod/inet-speedtest
+    container_name: inet-speedtest
+    restart: unless-stopped

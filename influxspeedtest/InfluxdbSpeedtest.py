@@ -1,5 +1,6 @@
 import sys
 import time
+import os
 
 import speedtest
 from influxdb import InfluxDBClient
@@ -7,12 +8,32 @@ from influxdb.exceptions import InfluxDBClientError, InfluxDBServerError
 from requests import ConnectTimeout, ConnectionError
 
 from influxspeedtest.common import log
-from influxspeedtest.config import config
-
 
 class InfluxdbSpeedtest():
 
     def __init__(self):
+
+        # Setup configuration
+        log.debug('Loading Configuration.')
+        self.config_delay = int(os.getenv("DELAY", 300))
+
+        # InfluxDB
+        self.config_influx_address = os.getenv("INFLUXDB_HOST", "127.0.0.1")
+        self.config_influx_port = os.getenv("INFLUXDB_PORT", 8086)
+        self.config_influx_database = os.getenv("INFLUXDB_DATABASE", "speedtest")
+        self.config_influx_measurement = os.getenv("INFLUXDB_MEASUREMENT", "speedtest")
+        self.config_influx_user = os.getenv("INFLUXDB_USR", "")
+        self.config_influx_password = os.getenv("INFLUXDB_PWD", "")
+        self.config_influx_ssl = os.getenv("INFLUXDB_SSL", False)
+        self.config_influx_verify_ssl = os.getenv("INFLUXDB_VERIFYSSL", True)
+
+        # Speedtest
+        self.config_servers = []
+        test_server = os.getenv("SPEEDTEST_SERVER", "")
+        if test_server:
+            self.config_servers = test_server.split(',')
+        
+        log.debug('Configuration Successfully Loaded')
 
         self.influx_client = self._get_influx_connection()
         self.speedtest = None
@@ -27,13 +48,13 @@ class InfluxdbSpeedtest():
         """
 
         influx = InfluxDBClient(
-            config.influx_address,
-            config.influx_port,
-            database=config.influx_database,
-            ssl=config.influx_ssl,
-            verify_ssl=config.influx_verify_ssl,
-            username=config.influx_user,
-            password=config.influx_password,
+            self.config_influx_address,
+            self.config_influx_port,
+            database=self.config_influx_database,
+            ssl=self.config_influx_ssl,
+            verify_ssl=self.config_influx_verify_ssl,
+            username=self.config_influx_user,
+            password=self.config_influx_password,
             timeout=5
         )
         try:
@@ -42,7 +63,7 @@ class InfluxdbSpeedtest():
             log.debug('Successful connection to InfluxDb')
         except (ConnectTimeout, InfluxDBClientError, ConnectionError) as e:
             if isinstance(e, ConnectTimeout):
-                log.critical('Unable to connect to InfluxDB at the provided address (%s)', config.influx_address)
+                log.critical('Unable to connect to InfluxDB at the provided address (%s)', self.config_influx_address)
             elif e.code == 401:
                 log.critical('Unable to connect to InfluxDB with provided credentials')
             else:
@@ -92,7 +113,7 @@ class InfluxdbSpeedtest():
 
         input_points = [
             {
-                'measurement': 'speed_test_results',
+                'measurement': self.config_influx_measurement,
                 'fields': {
                     'download': result_dict['download'],
                     'upload': result_dict['upload'],
@@ -154,8 +175,8 @@ class InfluxdbSpeedtest():
             self.influx_client.write_points(json_data)
         except (InfluxDBClientError, ConnectionError, InfluxDBServerError) as e:
             if hasattr(e, 'code') and e.code == 404:
-                log.error('Database %s Does Not Exist.  Attempting To Create', config.influx_database)
-                self.influx_client.create_database(config.influx_database)
+                log.error('Database %s Does Not Exist.  Attempting To Create', self.config_influx_database)
+                self.influx_client.create_database(self.config_influx_database)
                 self.influx_client.write_points(json_data)
                 return
 
@@ -167,10 +188,10 @@ class InfluxdbSpeedtest():
     def run(self):
 
         while True:
-            if not config.servers:
+            if not self.config_servers:
                 self.run_speed_test()
             else:
-                for server in config.servers:
+                for server in self.config_servers:
                     self.run_speed_test(server)
-            log.info('Waiting %s seconds until next test', config.delay)
-            time.sleep(config.delay)
+            log.info('Waiting %s seconds until next test', self.config_delay)
+            time.sleep(self.config_delay)
